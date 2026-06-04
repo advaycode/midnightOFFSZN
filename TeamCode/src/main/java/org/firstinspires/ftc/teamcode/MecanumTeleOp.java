@@ -3,29 +3,31 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 @TeleOp(name = "Mecanum TeleOp", group = "TeleOp")
 public class MecanumTeleOp extends LinearOpMode {
 
-    // ── Motor config names — match these in the Driver Hub hardware config ────
     private static final String MOTOR_FL = "leftFront";
     private static final String MOTOR_BL = "leftRear";
     private static final String MOTOR_FR = "rightFront";
     private static final String MOTOR_BR = "rightRear";
 
-    // ── Speed multipliers ─────────────────────────────────────────────────────
-    private static final double NORMAL_SPEED  = 1.0;
-    private static final double SLOW_SPEED    = 0.35;  // hold left trigger to activate
+    private static final double NORMAL_SPEED   = 1.0;
+    private static final double SLOW_SPEED     = 0.35;
+
+    // Predictive braking — scales counter-force to velocity when sticks released
+    private static final double BRAKE_GAIN     = 0.0003;  // tune up if braking feels weak
+    private static final double STICK_DEADBAND = 0.05;
 
     @Override
     public void runOpMode() {
-        DcMotor fl = hardwareMap.get(DcMotor.class, MOTOR_FL);
-        DcMotor bl = hardwareMap.get(DcMotor.class, MOTOR_BL);
-        DcMotor fr = hardwareMap.get(DcMotor.class, MOTOR_FR);
-        DcMotor br = hardwareMap.get(DcMotor.class, MOTOR_BR);
+        DcMotorEx fl = hardwareMap.get(DcMotorEx.class, MOTOR_FL);
+        DcMotorEx bl = hardwareMap.get(DcMotorEx.class, MOTOR_BL);
+        DcMotorEx fr = hardwareMap.get(DcMotorEx.class, MOTOR_FR);
+        DcMotorEx br = hardwareMap.get(DcMotorEx.class, MOTOR_BR);
 
-        // ── Run mode — must be set explicitly or setPower() may be ignored ──────
         fl.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         bl.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         fr.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -36,7 +38,6 @@ public class MecanumTeleOp extends LinearOpMode {
         fr.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         br.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
-        // ── Motor directions (flip if a side drives backwards) ────────────────
         fl.setDirection(DcMotorSimple.Direction.REVERSE);
         bl.setDirection(DcMotorSimple.Direction.REVERSE);
         fr.setDirection(DcMotorSimple.Direction.FORWARD);
@@ -52,20 +53,30 @@ public class MecanumTeleOp extends LinearOpMode {
         waitForStart();
 
         while (opModeIsActive()) {
-            // PS5: left stick Y is negative when pushed forward
-            double drive  = gamepad1.left_stick_y;   // forward / back
-            double strafe =  gamepad1.left_stick_x;   // left / right
-            double rotate =  gamepad1.right_stick_x;  // turn
+            double drive  =  gamepad1.left_stick_y;
+            double strafe = -gamepad1.left_stick_x;
+            double rotate = -gamepad1.right_stick_x;
+            double speed  =  gamepad1.left_trigger > 0.1 ? SLOW_SPEED : NORMAL_SPEED;
 
-            // left trigger = slow mode (PS5 left trigger is left_trigger float 0..1)
-            double speed = gamepad1.left_trigger > 0.1 ? SLOW_SPEED : NORMAL_SPEED;
+            boolean driverActive = Math.abs(drive)  > STICK_DEADBAND
+                                || Math.abs(strafe) > STICK_DEADBAND
+                                || Math.abs(rotate) > STICK_DEADBAND;
 
-            double flPow = (drive + strafe + rotate) * speed;
-            double blPow = (drive - strafe + rotate) * speed;
-            double frPow = (drive - strafe - rotate) * speed;
-            double brPow = (drive + strafe - rotate) * speed;
+            double flPow, blPow, frPow, brPow;
 
-            // Normalize so no value exceeds 1.0 while preserving ratio
+            if (driverActive) {
+                flPow = (drive + strafe + rotate) * speed;
+                blPow = (drive - strafe + rotate) * speed;
+                frPow = (drive - strafe - rotate) * speed;
+                brPow = (drive + strafe - rotate) * speed;
+            } else {
+                // Predictive braking: counter-force proportional to each motor's velocity
+                flPow = -fl.getVelocity() * BRAKE_GAIN;
+                blPow = -bl.getVelocity() * BRAKE_GAIN;
+                frPow = -fr.getVelocity() * BRAKE_GAIN;
+                brPow = -br.getVelocity() * BRAKE_GAIN;
+            }
+
             double max = Math.max(1.0,
                     Math.max(Math.abs(flPow),
                     Math.max(Math.abs(blPow),
@@ -77,12 +88,8 @@ public class MecanumTeleOp extends LinearOpMode {
             br.setPower(brPow / max);
 
             telemetry.addData("Gamepad connected", gamepad1.getGamepadId() != -1);
-            telemetry.addData("Raw sticks LY/LX/RX", "%.2f / %.2f / %.2f",
-                    gamepad1.left_stick_y, gamepad1.left_stick_x, gamepad1.right_stick_x);
             telemetry.addData("Speed mode", gamepad1.left_trigger > 0.1 ? "SLOW" : "NORMAL");
-            telemetry.addData("Drive / Strafe / Rotate", "%.2f / %.2f / %.2f", drive, strafe, rotate);
-            telemetry.addData("FL / BL / FR / BR", "%.2f / %.2f / %.2f / %.2f",
-                    flPow / max, blPow / max, frPow / max, brPow / max);
+            telemetry.addData("Braking", !driverActive);
             telemetry.update();
         }
     }

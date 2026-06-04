@@ -77,6 +77,7 @@ public class Tuning extends SelectableOpMode {
 
     @Override
     public void onSelect() {
+        Constants.applyPIDF();
         if (follower == null) {
             follower = Constants.createFollower(hardwareMap);
             PanelsConfigurables.INSTANCE.refreshClass(this);
@@ -150,7 +151,7 @@ class LocalizationTest extends OpMode {
      */
     @Override
     public void loop() {
-        follower.setTeleOpDrive(-gamepad1.left_stick_y, -gamepad1.left_stick_x, -gamepad1.right_stick_x, true);
+        follower.setTeleOpDrive(gamepad1.left_stick_y, gamepad1.left_stick_x, gamepad1.right_stick_x, true);
         follower.update();
 
         telemetryM.debug("x:" + follower.getPose().getX());
@@ -736,7 +737,6 @@ class TranslationalTuner extends OpMode {
     @Override
     public void init() {}
 
-    /** This initializes the Follower and creates the forward and backward Paths. */
     @Override
     public void init_loop() {
         telemetryM.debug("This will activate the translational PIDF(s)");
@@ -758,9 +758,9 @@ class TranslationalTuner extends OpMode {
         follower.followPath(forwards);
     }
 
-    /** This runs the OpMode, updating the Follower as well as printing out the debug statements to the Telemetry */
     @Override
     public void loop() {
+        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
 
@@ -825,12 +825,9 @@ class HeadingTuner extends OpMode {
         follower.followPath(forwards);
     }
 
-    /**
-     * This runs the OpMode, updating the Follower as well as printing out the debug statements to
-     * the Telemetry, as well as the Panels.
-     */
     @Override
     public void loop() {
+        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
 
@@ -902,12 +899,9 @@ class DriveTuner extends OpMode {
         follower.followPath(forwards);
     }
 
-    /**
-     * This runs the OpMode, updating the Follower as well as printing out the debug statements to
-     * the Telemetry, as well as the Panels.
-     */
     @Override
     public void loop() {
+        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
 
@@ -1037,12 +1031,9 @@ class CentripetalTuner extends OpMode {
         follower.followPath(forwards);
     }
 
-    /**
-     * This runs the OpMode, updating the Follower as well as printing out the debug statements to
-     * the Telemetry, as well as the Panels.
-     */
     @Override
     public void loop() {
+        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
         if (!follower.isBusy()) {
