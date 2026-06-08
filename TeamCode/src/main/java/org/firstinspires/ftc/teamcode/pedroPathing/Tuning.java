@@ -38,6 +38,41 @@ import java.util.List;
 public class Tuning extends SelectableOpMode {
     public static Follower follower;
 
+    // PIDF values — edit here in Panels to tune live
+    public static double headingP = 4.0;
+    public static double headingI = 0.0;
+    public static double headingD = 0.05;
+    public static double headingF = 0.0;
+
+    public static double secondaryHeadingP = 2.0;
+    public static double secondaryHeadingI = 0.0;
+    public static double secondaryHeadingD = 0.02;
+    public static double secondaryHeadingF = 0.0;
+
+    public static double translationalP = 2.0;
+    public static double translationalI = 0.0;
+    public static double translationalD = 0.15;
+    public static double translationalF = 0.0;
+
+    public static double secondaryTranslationalP = 1.0;
+    public static double secondaryTranslationalI = 0.0;
+    public static double secondaryTranslationalD = 0.1;
+    public static double secondaryTranslationalF = 0.0;
+
+    public static double driveP = 0.1;
+    public static double driveI = 0.0;
+    public static double driveD = 0.00035;
+    public static double driveF = 0.6;
+    public static double driveFilter = 0.015;
+
+    public static double secondaryDriveP = 0.02;
+    public static double secondaryDriveI = 0.0;
+    public static double secondaryDriveD = 0.000005;
+    public static double secondaryDriveF = 0.6;
+    public static double secondaryDriveFilter = 0.01;
+
+    public static double centripetalScaling = 0.0005;
+
     @IgnoreConfigurable
     static PoseHistory poseHistory;
 
@@ -77,7 +112,6 @@ public class Tuning extends SelectableOpMode {
 
     @Override
     public void onSelect() {
-        Constants.applyPIDF();
         if (follower == null) {
             follower = Constants.createFollower(hardwareMap);
             PanelsConfigurables.INSTANCE.refreshClass(this);
@@ -760,7 +794,6 @@ class TranslationalTuner extends OpMode {
 
     @Override
     public void loop() {
-        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
 
@@ -774,6 +807,7 @@ class TranslationalTuner extends OpMode {
             }
         }
 
+        Constants.applyPIDF();
         telemetryM.debug("Push the robot laterally to test the Translational PIDF(s).");
         telemetryM.update(telemetry);
     }
@@ -827,7 +861,6 @@ class HeadingTuner extends OpMode {
 
     @Override
     public void loop() {
-        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
 
@@ -841,6 +874,7 @@ class HeadingTuner extends OpMode {
             }
         }
 
+        Constants.applyPIDF();
         telemetryM.debug("Turn the robot manually to test the Heading PIDF(s).");
         telemetryM.update(telemetry);
     }
@@ -901,7 +935,6 @@ class DriveTuner extends OpMode {
 
     @Override
     public void loop() {
-        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
 
@@ -915,6 +948,7 @@ class DriveTuner extends OpMode {
             }
         }
 
+        Constants.applyPIDF();
         telemetryM.debug("Driving forward?: " + forward);
         telemetryM.update(telemetry);
     }
@@ -1033,7 +1067,6 @@ class CentripetalTuner extends OpMode {
 
     @Override
     public void loop() {
-        Constants.applyPIDF();
         follower.update();
         drawCurrentAndHistory();
         if (!follower.isBusy()) {
@@ -1046,6 +1079,7 @@ class CentripetalTuner extends OpMode {
             }
         }
 
+        Constants.applyPIDF();
         telemetryM.debug("Driving away from the origin along the curve?: " + forward);
         telemetryM.update(telemetry);
     }
