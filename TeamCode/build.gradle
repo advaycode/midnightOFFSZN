@@ -9,13 +9,32 @@
 // before doing so.
 
 
+// Custom definitions may go here
+
 // Include common definitions from above.
 apply from: '../build.common.gradle'
 apply from: '../build.dependencies.gradle'
-apply plugin: 'dev.frozenmilk.sinister.sloth.load'
 
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
+}
+
+repositories {
+    maven {
+        url = 'https://maven.brott.dev/'
+    }
+
+    maven {
+        url = 'https://mymaven.bylazar.com/releases'
+    }
+
+    maven {
+        url "https://repo.dairy.foundation/releases"
+    }
+
+    maven {
+        url "https://repo.dairy.foundation/snapshots"
+    }
 }
 
 dependencies {
@@ -28,15 +47,10 @@ dependencies {
     implementation "org.solverslib:pedroPathing:0.3.4" // pedroPathing
     //    implementation "org.solverslib:photon:0.3.4" // photon is optional (see docs for more info)
 
-    implementation "com.acmerobotics.dashboard:dashboard:0.5.1" // FTC Dashboard
-
     // Pedro Pathing
     implementation 'com.pedropathing:ftc:2.0.6'
     implementation 'com.pedropathing:telemetry:1.0.0'
 
     // Panels Dashboard
     implementation "com.bylazar:fullpanels:1.0.12"
-
-    // Sloth — faster wireless uploads
-    implementation "dev.frozenmilk.sinister:Sloth:0.2.4"
 }

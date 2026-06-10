@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.changes;
+import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.debugMotorRPMs;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.drawCurrent;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.drawCurrentAndHistory;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
@@ -23,6 +24,7 @@ import com.pedropathing.telemetry.SelectableOpMode;
 import com.pedropathing.util.PoseHistory;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,41 +40,6 @@ import java.util.List;
 public class Tuning extends SelectableOpMode {
     public static Follower follower;
 
-    // PIDF values — edit here in Panels to tune live
-    public static double headingP = 4.0;
-    public static double headingI = 0.0;
-    public static double headingD = 0.05;
-    public static double headingF = 0.0;
-
-    public static double secondaryHeadingP = 2.0;
-    public static double secondaryHeadingI = 0.0;
-    public static double secondaryHeadingD = 0.02;
-    public static double secondaryHeadingF = 0.0;
-
-    public static double translationalP = 2.0;
-    public static double translationalI = 0.0;
-    public static double translationalD = 0.15;
-    public static double translationalF = 0.0;
-
-    public static double secondaryTranslationalP = 1.0;
-    public static double secondaryTranslationalI = 0.0;
-    public static double secondaryTranslationalD = 0.1;
-    public static double secondaryTranslationalF = 0.0;
-
-    public static double driveP = 0.1;
-    public static double driveI = 0.0;
-    public static double driveD = 0.00035;
-    public static double driveF = 0.6;
-    public static double driveFilter = 0.015;
-
-    public static double secondaryDriveP = 0.02;
-    public static double secondaryDriveI = 0.0;
-    public static double secondaryDriveD = 0.000005;
-    public static double secondaryDriveF = 0.6;
-    public static double secondaryDriveFilter = 0.01;
-
-    public static double centripetalScaling = 0.0005;
-
     @IgnoreConfigurable
     static PoseHistory poseHistory;
 
@@ -81,6 +48,12 @@ public class Tuning extends SelectableOpMode {
 
     @IgnoreConfigurable
     static ArrayList<String> changes = new ArrayList<>();
+
+    @IgnoreConfigurable static DcMotorEx motorFL, motorBL, motorFR, motorBR;
+    @IgnoreConfigurable static int[] rpmPos = new int[4];
+    @IgnoreConfigurable static long rpmLastMs;
+    @IgnoreConfigurable static double[] rpmValues = new double[4];
+    static final double TICKS_PER_REV = 383.6; // GoBilda 435 RPM
 
     public Tuning() {
         super("Select a Tuning OpMode", s -> {
@@ -124,6 +97,16 @@ public class Tuning extends SelectableOpMode {
         poseHistory = follower.getPoseHistory();
 
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
+
+        motorFL = hardwareMap.get(DcMotorEx.class, "leftFront");
+        motorBL = hardwareMap.get(DcMotorEx.class, "leftRear");
+        motorFR = hardwareMap.get(DcMotorEx.class, "rightFront");
+        motorBR = hardwareMap.get(DcMotorEx.class, "rightRear");
+        rpmPos[0] = motorFL.getCurrentPosition();
+        rpmPos[1] = motorBL.getCurrentPosition();
+        rpmPos[2] = motorFR.getCurrentPosition();
+        rpmPos[3] = motorBR.getCurrentPosition();
+        rpmLastMs = System.currentTimeMillis();
     }
 
     @Override
@@ -147,6 +130,29 @@ public class Tuning extends SelectableOpMode {
     public static void stopRobot() {
         follower.startTeleopDrive(true);
         follower.setTeleOpDrive(0,0,0,true);
+    }
+
+    public static void debugMotorRPMs() {
+        long now = System.currentTimeMillis();
+        long dt = now - rpmLastMs;
+        if (dt > 0) {
+            int[] curr = {
+                motorFL.getCurrentPosition(),
+                motorBL.getCurrentPosition(),
+                motorFR.getCurrentPosition(),
+                motorBR.getCurrentPosition()
+            };
+            double dtMin = dt / 60000.0;
+            for (int i = 0; i < 4; i++) {
+                rpmValues[i] = (curr[i] - rpmPos[i]) / TICKS_PER_REV / dtMin;
+                rpmPos[i] = curr[i];
+            }
+            rpmLastMs = now;
+        }
+        telemetryM.debug("FL RPM: " + String.format("%.0f", rpmValues[0]));
+        telemetryM.debug("BL RPM: " + String.format("%.0f", rpmValues[1]));
+        telemetryM.debug("FR RPM: " + String.format("%.0f", rpmValues[2]));
+        telemetryM.debug("BR RPM: " + String.format("%.0f", rpmValues[3]));
     }
 }
 
@@ -185,13 +191,14 @@ class LocalizationTest extends OpMode {
      */
     @Override
     public void loop() {
-        follower.setTeleOpDrive(gamepad1.left_stick_y, gamepad1.left_stick_x, gamepad1.right_stick_x, true);
+        follower.setTeleOpDrive(-gamepad1.left_stick_y, -gamepad1.left_stick_x, -gamepad1.right_stick_x, true);
         follower.update();
 
         telemetryM.debug("x:" + follower.getPose().getX());
         telemetryM.debug("y:" + follower.getPose().getY());
         telemetryM.debug("heading:" + follower.getPose().getHeading());
         telemetryM.debug("total heading:" + follower.getTotalHeading());
+        debugMotorRPMs();
         telemetryM.update(telemetry);
 
         drawCurrentAndHistory();
@@ -433,6 +440,7 @@ class ForwardVelocityTuner extends OpMode {
                 telemetry.addData(String.valueOf(i), velocities.get(i));
             }
 
+            debugMotorRPMs();
             telemetryM.update(telemetry);
             telemetry.update();
 
@@ -534,6 +542,7 @@ class LateralVelocityTuner extends OpMode {
             telemetryM.debug("Strafe Velocity: " + average);
             telemetryM.debug("\n");
             telemetryM.debug("Press A to set the Lateral Velocity temporarily (while robot remains on).");
+            debugMotorRPMs();
             telemetryM.update(telemetry);
 
             if (gamepad1.aWasPressed()) {
@@ -638,6 +647,7 @@ class ForwardZeroPowerAccelerationTuner extends OpMode {
             telemetryM.debug("Forward Zero Power Acceleration (Deceleration): " + average);
             telemetryM.debug("\n");
             telemetryM.debug("Press A to set the Forward Zero Power Acceleration temporarily (while robot remains on).");
+            debugMotorRPMs();
             telemetryM.update(telemetry);
 
             if (gamepad1.aWasPressed()) {
@@ -740,6 +750,7 @@ class LateralZeroPowerAccelerationTuner extends OpMode {
             telemetryM.debug("Lateral Zero Power Acceleration (Deceleration): " + average);
             telemetryM.debug("\n");
             telemetryM.debug("Press A to set the Lateral Zero Power Acceleration temporarily (while robot remains on).");
+            debugMotorRPMs();
             telemetryM.update(telemetry);
 
             if (gamepad1.aWasPressed()) {
@@ -771,6 +782,7 @@ class TranslationalTuner extends OpMode {
     @Override
     public void init() {}
 
+    /** This initializes the Follower and creates the forward and backward Paths. */
     @Override
     public void init_loop() {
         telemetryM.debug("This will activate the translational PIDF(s)");
@@ -792,6 +804,7 @@ class TranslationalTuner extends OpMode {
         follower.followPath(forwards);
     }
 
+    /** This runs the OpMode, updating the Follower as well as printing out the debug statements to the Telemetry */
     @Override
     public void loop() {
         follower.update();
@@ -807,8 +820,8 @@ class TranslationalTuner extends OpMode {
             }
         }
 
-        Constants.applyPIDF();
         telemetryM.debug("Push the robot laterally to test the Translational PIDF(s).");
+        debugMotorRPMs();
         telemetryM.update(telemetry);
     }
 }
@@ -859,6 +872,10 @@ class HeadingTuner extends OpMode {
         follower.followPath(forwards);
     }
 
+    /**
+     * This runs the OpMode, updating the Follower as well as printing out the debug statements to
+     * the Telemetry, as well as the Panels.
+     */
     @Override
     public void loop() {
         follower.update();
@@ -874,8 +891,8 @@ class HeadingTuner extends OpMode {
             }
         }
 
-        Constants.applyPIDF();
         telemetryM.debug("Turn the robot manually to test the Heading PIDF(s).");
+        debugMotorRPMs();
         telemetryM.update(telemetry);
     }
 }
@@ -917,7 +934,7 @@ class DriveTuner extends OpMode {
     public void start() {
         follower.deactivateAllPIDFs();
         follower.activateDrive();
-        
+
         forwards = follower.pathBuilder()
                 .setGlobalDeceleration()
                 .addPath(new BezierLine(new Pose(0,0), new Pose(DISTANCE,0)))
@@ -933,6 +950,10 @@ class DriveTuner extends OpMode {
         follower.followPath(forwards);
     }
 
+    /**
+     * This runs the OpMode, updating the Follower as well as printing out the debug statements to
+     * the Telemetry, as well as the Panels.
+     */
     @Override
     public void loop() {
         follower.update();
@@ -948,8 +969,8 @@ class DriveTuner extends OpMode {
             }
         }
 
-        Constants.applyPIDF();
         telemetryM.debug("Driving forward?: " + forward);
+        debugMotorRPMs();
         telemetryM.update(telemetry);
     }
 }
@@ -1012,6 +1033,7 @@ class Line extends OpMode {
         }
 
         telemetryM.debug("Driving Forward?: " + forward);
+        debugMotorRPMs();
         telemetryM.update(telemetry);
     }
 }
@@ -1065,6 +1087,10 @@ class CentripetalTuner extends OpMode {
         follower.followPath(forwards);
     }
 
+    /**
+     * This runs the OpMode, updating the Follower as well as printing out the debug statements to
+     * the Telemetry, as well as the Panels.
+     */
     @Override
     public void loop() {
         follower.update();
@@ -1079,8 +1105,8 @@ class CentripetalTuner extends OpMode {
             }
         }
 
-        Constants.applyPIDF();
         telemetryM.debug("Driving away from the origin along the curve?: " + forward);
+        debugMotorRPMs();
         telemetryM.update(telemetry);
     }
 }
