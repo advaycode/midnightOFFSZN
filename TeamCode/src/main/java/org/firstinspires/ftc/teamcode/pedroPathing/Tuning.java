@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+// Static imports pull shared state (follower, telemetry, helpers) from the outer Tuning class into each inner OpMode
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.changes;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.debugMotorRPMs;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.drawCurrent;
@@ -8,8 +9,10 @@ import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.stopRobot;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.telemetryM;
 
+// PanelsConfigurables makes tunable static fields editable live on the Panels dashboard
 import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
+// @IgnoreConfigurable prevents a field from appearing in the Panels dashboard even inside a @Configurable class
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
 import com.bylazar.field.FieldManager;
 import com.bylazar.field.PanelsField;
@@ -20,6 +23,7 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.*;
 import com.pedropathing.math.*;
 import com.pedropathing.paths.*;
+// SelectableOpMode provides the folder/menu UI seen on the driver station for choosing a tuning routine
 import com.pedropathing.telemetry.SelectableOpMode;
 import com.pedropathing.util.PoseHistory;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -46,15 +50,18 @@ public class Tuning extends SelectableOpMode {
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
 
+    // Accumulates tuning values that changed this session so you can copy them into Constants
     @IgnoreConfigurable
     static ArrayList<String> changes = new ArrayList<>();
 
+    // Motor references held here so inner tuner classes can read encoder counts for RPM display
     @IgnoreConfigurable static DcMotorEx motorFL, motorBL, motorFR, motorBR;
     @IgnoreConfigurable static int[] rpmPos = new int[4];
     @IgnoreConfigurable static long rpmLastMs;
     @IgnoreConfigurable static double[] rpmValues = new double[4];
     static final double TICKS_PER_REV = 383.6; // GoBilda 435 RPM
 
+    // Constructor builds the selection menu tree — each folder groups related tuning OpModes
     public Tuning() {
         super("Select a Tuning OpMode", s -> {
             s.folder("Localization", l -> {
@@ -85,6 +92,7 @@ public class Tuning extends SelectableOpMode {
 
     @Override
     public void onSelect() {
+        // Rebuild the follower each time a tuning mode is selected so Constants changes take effect
         if (follower == null) {
             follower = Constants.createFollower(hardwareMap);
             PanelsConfigurables.INSTANCE.refreshClass(this);
@@ -98,6 +106,7 @@ public class Tuning extends SelectableOpMode {
 
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
 
+        // Grab motor references and seed RPM snapshot so the first delta is valid
         motorFL = hardwareMap.get(DcMotorEx.class, "leftFront");
         motorBL = hardwareMap.get(DcMotorEx.class, "leftRear");
         motorFR = hardwareMap.get(DcMotorEx.class, "rightFront");
@@ -112,6 +121,7 @@ public class Tuning extends SelectableOpMode {
     @Override
     public void onLog(List<String> lines) {}
 
+    // Draws just the robot's current pose on Panels Field — used in init loops before the path starts
     public static void drawCurrent() {
         try {
             Drawing.drawRobot(follower.getPose());
@@ -121,6 +131,7 @@ public class Tuning extends SelectableOpMode {
         }
     }
 
+    // Draws the full pose trail plus the current robot icon — call this in every running loop
     public static void drawCurrentAndHistory() {
         Drawing.drawPoseHistory(poseHistory);
         drawCurrent();
@@ -132,6 +143,7 @@ public class Tuning extends SelectableOpMode {
         follower.setTeleOpDrive(0,0,0,true);
     }
 
+    // Computes RPM from encoder deltas since the last call and logs all four motors to Panels telemetry
     public static void debugMotorRPMs() {
         long now = System.currentTimeMillis();
         long dt = now - rpmLastMs;
@@ -142,7 +154,7 @@ public class Tuning extends SelectableOpMode {
                 motorFR.getCurrentPosition(),
                 motorBR.getCurrentPosition()
             };
-            double dtMin = dt / 60000.0;
+            double dtMin = dt / 60000.0; // ms → minutes for RPM formula
             for (int i = 0; i < 4; i++) {
                 rpmValues[i] = (curr[i] - rpmPos[i]) / TICKS_PER_REV / dtMin;
                 rpmPos[i] = curr[i];
@@ -191,6 +203,7 @@ class LocalizationTest extends OpMode {
      */
     @Override
     public void loop() {
+        // Drive the robot with gamepad 1 while the localizer tracks position
         follower.setTeleOpDrive(-gamepad1.left_stick_y, -gamepad1.left_stick_x, -gamepad1.right_stick_x, true);
         follower.update();
 
@@ -243,6 +256,7 @@ class ForwardTuner extends OpMode {
     public void loop() {
         follower.update();
 
+        // The multiplier = target distance / (measured distance / current scalar) — paste this into Constants when done
         telemetryM.debug("Distance Moved: " + follower.getPose().getX());
         telemetryM.debug("The multiplier will display what your forward ticks to inches should be to scale your current distance to " + DISTANCE + " inches.");
         telemetryM.debug("Multiplier: " + (DISTANCE / (follower.getPose().getX() / follower.getPoseTracker().getLocalizer().getForwardMultiplier())));
@@ -290,6 +304,7 @@ class LateralTuner extends OpMode {
     public void loop() {
         follower.update();
 
+        // Y-axis distance is used here because strafe is lateral (Y in Pedro's coordinate system)
         telemetryM.debug("Distance Moved: " + follower.getPose().getY());
         telemetryM.debug("The multiplier will display what your strafe ticks to inches should be to scale your current distance to " + DISTANCE + " inches.");
         telemetryM.debug("Multiplier: " + (DISTANCE / (follower.getPose().getY() / follower.getPoseTracker().getLocalizer().getLateralMultiplier())));
@@ -338,6 +353,7 @@ class TurnTuner extends OpMode {
     public void loop() {
         follower.update();
 
+        // Total heading accumulates beyond ±π so a full spin reads ~2π even with heading wrapping
         telemetryM.debug("Total Angle: " + follower.getTotalHeading());
         telemetryM.debug("The multiplier will display what your turn ticks to inches should be to scale your current angle to " + ANGLE + " radians.");
         telemetryM.debug("Multiplier: " + (ANGLE / (follower.getTotalHeading() / follower.getPoseTracker().getLocalizer().getTurningMultiplier())));
@@ -363,6 +379,7 @@ class TurnTuner extends OpMode {
  * @version 1.0, 3/13/2024
  */
 class ForwardVelocityTuner extends OpMode {
+    // Rolling buffer — keeps only the most recent RECORD_NUMBER velocity samples for averaging
     private final ArrayList<Double> velocities = new ArrayList<>();
     public static double DISTANCE = 48;
     public static double RECORD_NUMBER = 10;
@@ -389,6 +406,7 @@ class ForwardVelocityTuner extends OpMode {
     /** This starts the OpMode by setting the drive motors to run forward at full power. */
     @Override
     public void start() {
+        // Pre-fill buffer with zeros so the rolling average is always RECORD_NUMBER samples wide
         for (int i = 0; i < RECORD_NUMBER; i++) {
             velocities.add(0.0);
         }
@@ -416,12 +434,15 @@ class ForwardVelocityTuner extends OpMode {
 
         if (!end) {
             if (Math.abs(follower.getPose().getX()) > DISTANCE) {
+                // Robot reached target distance — stop and display the averaged velocity
                 end = true;
                 stopRobot();
             } else {
                 follower.setTeleOpDrive(1,0,0,true);
                 //double currentVelocity = Math.abs(follower.getVelocity().getXComponent());
+                // Read velocity directly from the localizer for highest accuracy
                 double currentVelocity = Math.abs(follower.poseTracker.getLocalizer().getVelocity().getX());
+                // Slide the rolling window: add newest sample, drop oldest
                 velocities.add(currentVelocity);
                 velocities.remove(0);
             }
@@ -444,6 +465,7 @@ class ForwardVelocityTuner extends OpMode {
             telemetryM.update(telemetry);
             telemetry.update();
 
+            // Press A to apply the measured value to the running follower — also appends it to the changes log
             if (gamepad1.aWasPressed()) {
                 follower.setXVelocity(average);
                 String message = "XMovement: " + average;
@@ -527,6 +549,7 @@ class LateralVelocityTuner extends OpMode {
                 stopRobot();
             } else {
                 follower.setTeleOpDrive(0,1,0,true);
+                // Project the velocity vector onto the strafe axis (π/2 = 90°) to get the lateral component
                 double currentVelocity = Math.abs(follower.getVelocity().dot(new Vector(1, Math.PI / 2)));
                 velocities.add(currentVelocity);
                 velocities.remove(0);
@@ -545,6 +568,7 @@ class LateralVelocityTuner extends OpMode {
             debugMotorRPMs();
             telemetryM.update(telemetry);
 
+            // Press A to apply the measured value and record it in the changes log
             if (gamepad1.aWasPressed()) {
                 follower.setYVelocity(average);
                 String message = "YMovement: " + average;
@@ -619,9 +643,11 @@ class ForwardZeroPowerAccelerationTuner extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // Project velocity onto the robot's current heading to get the forward component
         Vector heading = new Vector(1.0, follower.getPose().getHeading());
         if (!end) {
             if (!stopping) {
+                // Wait until the robot reaches target velocity, then cut power and start recording
                 if (follower.getVelocity().dot(heading) > VELOCITY) {
                     previousVelocity = follower.getVelocity().dot(heading);
                     previousTimeNano = System.nanoTime();
@@ -629,6 +655,7 @@ class ForwardZeroPowerAccelerationTuner extends OpMode {
                     follower.setTeleOpDrive(0,0,0,true);
                 }
             } else {
+                // Record each instantaneous deceleration sample (Δv / Δt in seconds)
                 double currentVelocity = follower.getVelocity().dot(heading);
                 accelerations.add((currentVelocity - previousVelocity) / ((System.nanoTime() - previousTimeNano) / Math.pow(10.0, 9)));
                 previousVelocity = currentVelocity;
@@ -650,6 +677,7 @@ class ForwardZeroPowerAccelerationTuner extends OpMode {
             debugMotorRPMs();
             telemetryM.update(telemetry);
 
+            // Press A to apply measured deceleration and log it to the changes list
             if (gamepad1.aWasPressed()) {
                 follower.getConstants().setForwardZeroPowerAcceleration(average);
                 String message = "Forward Zero Power Acceleration: " + average;
@@ -722,6 +750,7 @@ class LateralZeroPowerAccelerationTuner extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // Strafe heading is 90° off the forward heading — subtract π/2 to get the lateral axis vector
         Vector heading = new Vector(1.0, follower.getPose().getHeading() - Math.PI / 2);
         if (!end) {
             if (!stopping) {
@@ -732,6 +761,7 @@ class LateralZeroPowerAccelerationTuner extends OpMode {
                     follower.setTeleOpDrive(0,0,0,true);
                 }
             } else {
+                // Record each deceleration sample while the robot is coasting to a stop
                 double currentVelocity = Math.abs(follower.getVelocity().dot(heading));
                 accelerations.add((currentVelocity - previousVelocity) / ((System.nanoTime() - previousTimeNano) / Math.pow(10.0, 9)));
                 previousVelocity = currentVelocity;
@@ -795,6 +825,7 @@ class TranslationalTuner extends OpMode {
 
     @Override
     public void start() {
+        // Activate only the translational PIDF so heading and drive don't interfere with the test
         follower.deactivateAllPIDFs();
         follower.activateTranslational();
         forwards = new Path(new BezierLine(new Pose(0,0), new Pose(DISTANCE,0)));
@@ -810,6 +841,7 @@ class TranslationalTuner extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // Bounce between forward and backward paths so the translational PIDF is always active
         if (!follower.isBusy()) {
             if (forward) {
                 forward = false;
@@ -863,6 +895,7 @@ class HeadingTuner extends OpMode {
 
     @Override
     public void start() {
+        // Activate only the heading PIDF so translational and drive corrections don't mask the test
         follower.deactivateAllPIDFs();
         follower.activateHeading();
         forwards = new Path(new BezierLine(new Pose(0,0), new Pose(DISTANCE,0)));
@@ -881,6 +914,7 @@ class HeadingTuner extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // Continuously bounce forward and backward so the heading PIDF stays engaged
         if (!follower.isBusy()) {
             if (forward) {
                 forward = false;
@@ -932,9 +966,11 @@ class DriveTuner extends OpMode {
 
     @Override
     public void start() {
+        // Activate only the drive PIDF — translational/heading are off to isolate velocity tracking
         follower.deactivateAllPIDFs();
         follower.activateDrive();
 
+        // setGlobalDeceleration() lets Pedro automatically ramp down at the end of the path
         forwards = follower.pathBuilder()
                 .setGlobalDeceleration()
                 .addPath(new BezierLine(new Pose(0,0), new Pose(DISTANCE,0)))
@@ -959,6 +995,7 @@ class DriveTuner extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // When one path finishes, immediately start the opposite direction
         if (!follower.isBusy()) {
             if (forward) {
                 forward = false;
@@ -1008,6 +1045,7 @@ class Line extends OpMode {
 
     @Override
     public void start() {
+        // All PIDFs active — this is the final integration test after individual tuning is done
         follower.activateAllPIDFs();
         forwards = new Path(new BezierLine(new Pose(0,0), new Pose(DISTANCE,0)));
         forwards.setConstantHeadingInterpolation(0);
@@ -1078,9 +1116,11 @@ class CentripetalTuner extends OpMode {
     @Override
     public void start() {
         follower.activateAllPIDFs();
+        // BezierCurve with one control point creates the arc needed to stress-test centripetal correction
         forwards = new Path(new BezierCurve(new Pose(), new Pose(Math.abs(DISTANCE),0), new Pose(Math.abs(DISTANCE),DISTANCE)));
         backwards = new Path(new BezierCurve(new Pose(Math.abs(DISTANCE),DISTANCE), new Pose(Math.abs(DISTANCE),0), new Pose(0,0)));
 
+        // Reverse the heading interpolation so the robot faces the correct direction on the return arc
         backwards.setTangentHeadingInterpolation();
         backwards.reverseHeadingInterpolation();
 
@@ -1136,6 +1176,7 @@ class Triangle extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // atParametricEnd() returns true when the follower reaches the end of the last segment
         if (follower.atParametricEnd()) {
             follower.followPath(triangle, true);
         }
@@ -1158,6 +1199,7 @@ class Triangle extends OpMode {
     public void start() {
         follower.setStartingPose(startPose);
 
+        // Chain three straight segments with linear heading interpolation to form a triangle
         triangle = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, interPose))
                 .setLinearHeadingInterpolation(startPose.getHeading(), interPose.getHeading())
@@ -1187,6 +1229,7 @@ class Circle extends OpMode {
     private PathChain circle;
 
     public void start() {
+        // Four quadrant BezierCurves approximate a circle; facingPoint() keeps the robot pointed toward the center
         circle = follower.pathBuilder()
                 .addPath(new BezierCurve(new Pose(0, 0), new Pose(RADIUS, 0), new Pose(RADIUS, RADIUS)))
                 .setHeadingInterpolation(HeadingInterpolator.facingPoint(0, RADIUS))
@@ -1222,6 +1265,7 @@ class Circle extends OpMode {
         follower.update();
         drawCurrentAndHistory();
 
+        // Loop the circle indefinitely until the OpMode is stopped
         if (follower.atParametricEnd()) {
             follower.followPath(circle);
         }
@@ -1236,8 +1280,10 @@ class Circle extends OpMode {
  */
 class Drawing {
     public static final double ROBOT_RADIUS = 9; // woah
+    // panelsField is the canvas — all draw calls go through this singleton
     private static final FieldManager panelsField = PanelsField.INSTANCE.getField();
 
+    // Style bundles color and stroke properties; blue for current robot, green for history trail
     private static final Style robotLook = new Style(
             "", "#3F51B5", 0.0
     );
@@ -1282,10 +1328,12 @@ class Drawing {
             return;
         }
 
+        // Draw the robot body as a circle centered on the pose
         panelsField.setStyle(style);
         panelsField.moveCursor(pose.getX(), pose.getY());
         panelsField.circle(ROBOT_RADIUS);
 
+        // Draw a heading line from the center outward to show which direction the robot faces
         Vector v = pose.getHeadingAsUnitVector();
         v.setMagnitude(v.getMagnitude() * ROBOT_RADIUS);
         double x1 = pose.getX() + v.getXComponent() / 2, y1 = pose.getY() + v.getYComponent() / 2;
@@ -1314,6 +1362,7 @@ class Drawing {
     public static void drawPath(Path path, Style style) {
         double[][] points = path.getPanelsDrawingPoints();
 
+        // Replace any NaN coordinates with 0 so the field canvas doesn't throw on invalid values
         for (int i = 0; i < points[0].length; i++) {
             for (int j = 0; j < points.length; j++) {
                 if (Double.isNaN(points[j][i])) {
@@ -1349,6 +1398,7 @@ class Drawing {
     public static void drawPoseHistory(PoseHistory poseTracker, Style style) {
         panelsField.setStyle(style);
 
+        // Connect consecutive historical poses with line segments to draw the robot's trail
         int size = poseTracker.getXPositionsArray().length;
         for (int i = 0; i < size - 1; i++) {
 
@@ -1370,6 +1420,7 @@ class Drawing {
      * This tries to send the current packet to FTControl Panels.
      */
     public static void sendPacket() {
+        // update() flushes all queued draw calls to the Panels dashboard
         panelsField.update();
     }
 }

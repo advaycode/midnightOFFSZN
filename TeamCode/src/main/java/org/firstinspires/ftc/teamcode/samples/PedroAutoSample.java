@@ -1,14 +1,18 @@
 package org.firstinspires.ftc.teamcode.samples;
 
+// Pedro Pathing path following and geometry types
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
+// Marks this as an autonomous OpMode visible on the driver station
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+// CommandOpMode from SolversLib provides a sequential command scheduler
 import com.seattlesolvers.solverslib.command.CommandOpMode;
 import com.seattlesolvers.solverslib.command.InstantCommand;
 import com.seattlesolvers.solverslib.command.WaitCommand;
+// FollowPathCommand tells the follower to drive along a PathChain and finishes when the path is complete
 import com.seattlesolvers.solverslib.pedroCommand.FollowPathCommand;
 import com.seattlesolvers.solverslib.util.TelemetryData;
 
@@ -19,7 +23,7 @@ public class PedroAutoSample extends CommandOpMode {
     private Follower follower;
     TelemetryData telemetryData = new TelemetryData(telemetry);
 
-    // Poses
+    // Named field positions — Pose holds X, Y (inches from field origin) and heading (radians)
     private final Pose startPose = new Pose(9, 111, Math.toRadians(-90));
     private final Pose scorePose = new Pose(16, 128, Math.toRadians(-45));
     private final Pose pickup1Pose = new Pose(30, 121, Math.toRadians(0));
@@ -31,6 +35,7 @@ public class PedroAutoSample extends CommandOpMode {
     private PathChain scorePreload, grabPickup1, grabPickup2, grabPickup3;
     private PathChain scorePickup1, scorePickup2, scorePickup3, park;
 
+    // Builds all PathChains by linking Pose waypoints — BezierLine = straight segment, BezierCurve = smooth arc
     public void buildPaths() {
         scorePreload = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, scorePose))
@@ -67,6 +72,7 @@ public class PedroAutoSample extends CommandOpMode {
                 .setLinearHeadingInterpolation(pickup3Pose.getHeading(), scorePose.getHeading())
                 .build();
 
+        // BezierCurve with a control point smooths the corner between score and park
         park = follower.pathBuilder()
                 .addPath(new BezierCurve(
                         scorePose,
@@ -78,6 +84,7 @@ public class PedroAutoSample extends CommandOpMode {
     }
 
     // Mechanism commands - replace these with your actual subsystem commands
+    // InstantCommand wraps a zero-duration lambda so it can be dropped into the command scheduler
     private InstantCommand openOuttakeClaw() {
         return new InstantCommand(() -> {
             // Example: outtakeSubsystem.openClaw();
@@ -106,14 +113,12 @@ public class PedroAutoSample extends CommandOpMode {
     public void initialize() {
         super.reset();
 
-
-        // Initialize follower
+        // Build the follower from Constants and set where the robot starts on the field
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startPose);
         buildPaths();
 
-
-        // Schedule the autonomous sequence
+        // schedule() queues commands to run sequentially; each command finishes before the next starts
         schedule(
                 // Score preload
                 new FollowPathCommand(follower, scorePreload),
@@ -148,8 +153,10 @@ public class PedroAutoSample extends CommandOpMode {
     @Override
     public void run() {
         super.run();
+        // update() must be called every loop so the follower can compute and apply motor corrections
         follower.update();
 
+        // Stream current pose to driver station telemetry each loop
         telemetryData.addData("X", follower.getPose().getX());
         telemetryData.addData("Y", follower.getPose().getY());
         telemetryData.addData("Heading", follower.getPose().getHeading());

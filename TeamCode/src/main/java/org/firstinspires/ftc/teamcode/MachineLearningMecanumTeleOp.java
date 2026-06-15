@@ -1,10 +1,13 @@
 package org.firstinspires.ftc.teamcode;
 
+// PanelsConfigurables lets you edit public static fields live from the Panels dashboard
 import com.bylazar.configurables.PanelsConfigurables;
+// @Configurable exposes all public static fields in this class to the Panels dashboard
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+// DcMotorEx extends DcMotor with encoder velocity access needed for RPM calculation
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
@@ -35,23 +38,26 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        // Retrieve all four drive motors by their hardware map names
         DcMotorEx fl = hardwareMap.get(DcMotorEx.class, "leftFront");
         DcMotorEx bl = hardwareMap.get(DcMotorEx.class, "leftRear");
         DcMotorEx fr = hardwareMap.get(DcMotorEx.class, "rightFront");
         DcMotorEx br = hardwareMap.get(DcMotorEx.class, "rightRear");
 
+        // Reset encoders, run open-loop, and brake on zero power
         for (DcMotorEx m : new DcMotorEx[]{fl, bl, fr, br}) {
             m.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
 
+        // Left side reversed so all wheels drive in the same direction for positive power
         fl.setDirection(DcMotorSimple.Direction.REVERSE);
         bl.setDirection(DcMotorSimple.Direction.REVERSE);
         fr.setDirection(DcMotorSimple.Direction.FORWARD);
         br.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        // RPM tracking state
+        // RPM tracking state — snapshot encoder counts and timestamp each loop to compute RPM
         int[] prevPos = {
             fl.getCurrentPosition(), bl.getCurrentPosition(),
             fr.getCurrentPosition(), br.getCurrentPosition()
@@ -62,6 +68,7 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
         boolean equalizationOn = false;
         boolean lastLBumper    = false;
 
+        // Pull the latest Panels values into static fields before waiting for start
         PanelsConfigurables.INSTANCE.refreshClass(this);
         telemetry.addData("Status", "Ready — Left Bumper toggles RPM equalization");
         telemetry.update();
@@ -70,6 +77,7 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
         while (opModeIsActive()) {
 
             // ── Toggle equalization ───────────────────────────────────────────
+            // Rising-edge detection on left bumper flips the equalization flag
             boolean lbNow = gamepad1.left_bumper;
             if (lbNow && !lastLBumper) equalizationOn = !equalizationOn;
             lastLBumper = lbNow;
@@ -80,23 +88,27 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
             double rotate = -gamepad1.right_stick_x;
             double speed  =  gamepad1.left_trigger > 0.1 ? SLOW_SPEED : NORMAL_SPEED;
 
+            // Dead-band check — if all sticks are idle, apply active braking instead of driving
             boolean driverActive = Math.abs(drive)  > STICK_DEADBAND
                                 || Math.abs(strafe) > STICK_DEADBAND
                                 || Math.abs(rotate) > STICK_DEADBAND;
 
             double flPow, blPow, frPow, brPow;
             if (driverActive) {
+                // Standard mecanum mixing: each wheel gets a combination of drive, strafe, and rotate
                 flPow = (drive + strafe + rotate) * speed;
                 blPow = (drive - strafe + rotate) * speed;
                 frPow = (drive - strafe - rotate) * speed;
                 brPow = (drive + strafe - rotate) * speed;
             } else {
+                // When sticks are idle, oppose current motor velocity slightly to slow coast
                 flPow = -fl.getVelocity() * BRAKE_GAIN;
                 blPow = -bl.getVelocity() * BRAKE_GAIN;
                 frPow = -fr.getVelocity() * BRAKE_GAIN;
                 brPow = -br.getVelocity() * BRAKE_GAIN;
             }
 
+            // Normalize so the largest wheel power is at most 1.0, preserving direction ratios
             double maxPow = Math.max(1.0,
                     Math.max(Math.abs(flPow),
                     Math.max(Math.abs(blPow),
@@ -107,6 +119,7 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
             brPow /= maxPow;
 
             // ── Update smoothed RPM (EMA on position deltas) ──────────────────
+            // EMA (exponential moving average) reduces encoder noise before equalization uses the value
             long now = System.currentTimeMillis();
             long dt  = now - prevMs;
             if (dt > 0) {
@@ -114,7 +127,7 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
                     fl.getCurrentPosition(), bl.getCurrentPosition(),
                     fr.getCurrentPosition(), br.getCurrentPosition()
                 };
-                double dtMin = dt / 60000.0;
+                double dtMin = dt / 60000.0; // ms → minutes for RPM formula
                 double a     = rpmSmoothing;
                 for (int i = 0; i < 4; i++) {
                     double raw = (cur[i] - prevPos[i]) / TICKS_PER_REV / dtMin;
@@ -125,6 +138,7 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
             }
 
             // ── Active RPM equalization ───────────────────────────────────────
+            // Nudge each motor toward the fleet average RPM using a proportional correction
             if (equalizationOn && driverActive) {
                 double mean = (rpm[0] + rpm[1] + rpm[2] + rpm[3]) / 4.0;
                 if (Math.abs(mean) >= MIN_RPM_EQUALIZE) {
@@ -159,6 +173,7 @@ public class MachineLearningMecanumTeleOp extends LinearOpMode {
         }
     }
 
+    // Clamp helper — ensures motor power stays within the legal -1.0 to 1.0 range
     private static double clamp(double v) {
         return Math.max(-1.0, Math.min(1.0, v));
     }
