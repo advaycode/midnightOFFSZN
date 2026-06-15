@@ -20,7 +20,7 @@ public class ServoTest extends OpMode {
         testServo.setPosition(0.0);
         }
         if (gamepad1.dpad_right) {
-            testServo.setPosition(0.8);
+            testServo.setPosition(0.6);
         }
     }
 
