@@ -8,6 +8,9 @@ import com.qualcomm.robotcore.hardware.Servo;
 public class ServoTest extends OpMode {
 
     private Servo testServo;
+    private double currentPosition = 0.5;
+    boolean lastPressed = false;
+    boolean lastLeftPressed = false;
 
     @Override
     public void init() {
@@ -16,12 +19,25 @@ public class ServoTest extends OpMode {
 
     @Override
     public void loop() {
-        if (gamepad1.dpad_left) {
-        testServo.setPosition(0.0);
+        if (gamepad1.dpad_left && !lastLeftPressed) {
+        currentPosition = currentPosition - 0.01;
+           currentPosition = Math.max(0.0, Math.min(1.0, currentPosition));
+            testServo.setPosition(currentPosition);
         }
-        if (gamepad1.dpad_right) {
-            testServo.setPosition(0.8);
+        if (gamepad1.dpad_up) {
+            currentPosition = 0.5;
+            testServo.setPosition(currentPosition);
         }
+        if(gamepad1.dpad_right && !lastPressed) {
+            currentPosition = currentPosition + 0.01;
+            currentPosition = Math.max(0.0, Math.min(1.0, currentPosition));
+            testServo.setPosition(currentPosition);
+        }
+
+        telemetry.addData("Servo Position", currentPosition * 130);
+        telemetry.update();
+        lastPressed = gamepad1.dpad_right;
+        lastLeftPressed = gamepad1.dpad_left;
     }
 
 
